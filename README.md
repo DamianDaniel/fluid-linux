@@ -1,4 +1,4 @@
-# Fluid Linux 
+# Liquid Linux 
 -----
 
 <img src=".assets/fluid.svg" alt="Fluid logo" width="180" align="right">
