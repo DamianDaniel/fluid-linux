@@ -2,9 +2,6 @@
 
 <img src=".assets/fluid.svg" alt="Fluid Linux logo" width="180" align="right">
 
-> **Status:** Early-stage experimental project  
-> **Name:** `Fluid Linux` is currently a working codename and may change later
-
 Fluid Linux is an experimental Debian-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Debian experience without the usual systemd-based setup.
 
 The project plans to use **Finit**, or alternatively **Laked**, as its init system.
@@ -75,8 +72,7 @@ Planned documentation areas include:
 
 ---
 
-## Cat
-
+### Cat:
 ![cat](.assets/cat.gif)
 
 ---
