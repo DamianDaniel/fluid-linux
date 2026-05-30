@@ -7,7 +7,7 @@
 
 Fluid Linux is an experimental Debian-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Debian experience without the usual systemd-based setup.
 
-The project plans to use **Finit**, or alternatively **Laked**, as its init system. It also offers pre-riced water/wave-themed desktop environments and window managers.
+The project plans to use **Finit**, or alternatively **Laked**, as its init system.
 
 ---
 
@@ -32,7 +32,6 @@ The project plans to use **Finit**, or alternatively **Laked**, as its init syst
 - Debian-based desktop operating system.
 - No systemd by default.
 - Finit and Laked flavors.
-- Planned Laked support as a first-class init option.
 - Musl libc direction.
 - Community-driven development.
 - Pre-riced water/wave-themed desktops and window managers.
@@ -66,8 +65,6 @@ Uses Fish as the default shell for a more interactive command-line experience.
 
 ## Documentation
 
-Documentation is a main priority for Fluid Linux.
-
 Planned documentation areas include:
 
 - Installation guide
@@ -80,12 +77,10 @@ Planned documentation areas include:
 
 ## Cat
 
-Because every serious operating system needs a cat.
-
 ![cat](.assets/cat.gif)
 
 ---
 
 ## License
 
-Fluid Linux follows the same licensing direction as Debian. Individual packages may keep their original upstream licenses.
+Fluid Linux follows the same licensing direction as Debian.
