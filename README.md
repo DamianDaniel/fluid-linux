@@ -1,5 +1,4 @@
-# Fluid Linux
-A fork of Debian using finit instead of the traditional systemd init system. 
+# Fluid Linux 
 =======
 <img src=".assets/fluid.svg" alt="Fluid logo" width="180" align="right">
 A fork of Debian using finit (or laked optionally) instead of the traditional systemd init system.
