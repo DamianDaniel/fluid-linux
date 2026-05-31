@@ -1,3 +1,5 @@
+<img src=".assets/boreal-banner-neue.png" alt="BorealOS banner" style="width:100%;">
+
 # BorealOS
 
 <img src=".assets/boreal.svg" alt="BorealOS logo" width="180" align="right">
