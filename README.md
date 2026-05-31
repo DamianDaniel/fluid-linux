@@ -2,7 +2,7 @@
 
 <img src=".assets/fluid.svg" alt="Fluid Linux logo" width="180" align="right">
 
-Fluid Linux is a Alpine-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Debian experience without the usual systemd-based setup.
+Fluid Linux is a Alpine-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Alpine experience without the usual systemd-based setup.
 
 The project plans to use **finit**, or alternatively **laked**, as its init system.
 
