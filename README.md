@@ -2,7 +2,7 @@
 
 <img src=".assets/fluid.svg" alt="Fluid Linux logo" width="180" align="right">
 
-Fluid Linux is a Debian-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Debian experience without the usual systemd-based setup.
+Fluid Linux is a Alpine-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Debian experience without the usual systemd-based setup.
 
 The project plans to use **finit**, or alternatively **laked**, as its init system.
 
@@ -25,7 +25,7 @@ The project plans to use **finit**, or alternatively **laked**, as its init syst
 
 ## Key Features
 
-- Debian-based desktop operating system.
+- Alpine-based desktop operating system.
 - No systemd by default.
 - Finit and laked flavors.
 - Musl libc direction.
@@ -67,9 +67,3 @@ Planned documentation areas include:
 
 ### Cat:
 ![cat](.assets/cat.gif)
-
----
-
-## License
-
-Fluid Linux follows the same licensing direction as Debian.
