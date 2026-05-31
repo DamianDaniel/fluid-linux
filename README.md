@@ -1,10 +1,8 @@
-# Fluid Linux
+# BorealOS
 
 <img src=".assets/fluid.svg" alt="Fluid Linux logo" width="180" align="right">
 
-Fluid Linux is a Alpine-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Alpine experience without the usual systemd-based setup.
-
-The project plans to use **finit**, or alternatively **laked**, as its init system.
+BorealOS is a Alpine-based desktop Linux distribution for x86_64 systems. It aims to provide a clean Alpine experience without the usual systemd setup using aurorad which keeps the compatibility of systemd but removes the unnecessary and hated features.
 
 ---
 
@@ -15,10 +13,8 @@ The project plans to use **finit**, or alternatively **laked**, as its init syst
 | Base | Alpine-based |
 | Architecture | x86_64 only |
 | Target users | Intermediate Linux users |
-| Init system | finit or laked |
+| Init system | aurorad |
 | Default shell | `sh` |
-| libc | Musl libc |
-| Theme | Water/wave-inspired rice |
 | Documentation | Documentation-first, with focus on man pages |
 
 ---
@@ -26,9 +22,7 @@ The project plans to use **finit**, or alternatively **laked**, as its init syst
 ## Key Features
 
 - Alpine-based desktop operating system.
-- No systemd by default.
-- Finit and laked flavors.
-- Musl libc direction.
+- No default systems.
 - Community-driven development.
 - Pre-riced water/wave-themed desktops and window managers.
 - Warnings before risky operations.
