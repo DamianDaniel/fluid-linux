@@ -21,8 +21,8 @@ BorealOS is a Alpine-based desktop Linux distribution for x86_64 systems. It aim
 
 ## Key Features
 
+- Own unit system forked off of systems keeping compatibility but debloating.
 - Alpine-based desktop operating system.
-- No default systems.
 - Community-driven development.
 - Pre-riced water/wave-themed desktops and window managers.
 - Warnings before risky operations.
