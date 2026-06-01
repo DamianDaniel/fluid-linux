@@ -1,6 +1,0 @@
-[submodule "testdata"]
-	path = testdata
-	url = https://salsa.debian.org/qa/debsources-testdata.git
-[submodule "archvsync"]
-	path = archvsync
-	url = https://ftp-master.debian.org/git/archvsync.git

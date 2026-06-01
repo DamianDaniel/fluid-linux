@@ -1,3 +1,0 @@
-#!/bin/bash
-/opt/db-init
-/opt/debsources/bin/debsources-update
