@@ -1,0 +1,32 @@
+# Build artifacts
+*.iso
+*.img
+*.qcow2
+*.raw
+*.deb
+*.udeb
+*.buildinfo
+*.changes
+
+# Generated root/build directories
+rootfs/
+chroot/
+binary/
+cache/
+tmp/
+build/live-build/chroot/
+build/live-build/binary/
+build/live-build/cache/
+build/live-build/.build/
+
+# Python/tooling cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

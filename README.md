@@ -56,6 +56,15 @@ Planned documentation areas include:
 
 <br>
 
+## Development Status
+
+BorealOS is currently in the early repository-structure and build-planning phase.
+
+The first technical milestone is a minimal Debian-based ISO that boots in a
+virtual machine with `aurorad` as PID 1.
+
+<br>
+
 ## Cat
 
 ![cat](.assets/cat.gif)
