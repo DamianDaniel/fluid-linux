@@ -15,4 +15,12 @@ lb clean
 bash auto/config
 lb build
 
-echo "Done. ISO: $(ls *.iso)"
+ISO=$(ls live-image-amd64.hybrid.iso 2>/dev/null || ls *.iso 2>/dev/null | head -1)
+if [ -z "$ISO" ]; then
+    echo "No ISO found"
+    exit 1
+fi
+
+mkdir -p /mnt/hostshare
+mount -t vboxsf hostshare /mnt/hostshare || echo "WARNING: VBoxSF mount failed, copy manually: $ISO"
+cp "$ISO" /mnt/hostshare/borealoOS.iso && echo "ISO copied to hostshare"
