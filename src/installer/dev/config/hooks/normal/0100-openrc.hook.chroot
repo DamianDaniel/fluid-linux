@@ -1,7 +1,5 @@
 #!/bin/bash
-apt-get install -y --no-install-recommends sysvinit-core openrc \
-    -o APT::Force-LoopBreak=1 \
-    -o Dpkg::Options::="--force-depends" \
-    -o Dpkg::Options::="--force-remove-essential"
-dpkg --purge systemd-sysv systemd || true
+dpkg --force-depends --force-remove-essential -r systemd-sysv || true
+dpkg --force-depends --force-remove-essential -r systemd || true
+apt-get install -y --no-install-recommends -o APT::Force-LoopBreak=1 openrc sysvinit-core
 apt-get -f install -y || true

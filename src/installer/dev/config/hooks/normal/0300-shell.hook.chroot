@@ -1,0 +1,6 @@
+#!/bin/bash
+if dpkg -l fish 2>/dev/null | grep -q "^ii"; then
+    chsh -s /usr/bin/fish "$USERNAME" || true
+else
+    chsh -s /bin/sh "$USERNAME" || true
+fi
