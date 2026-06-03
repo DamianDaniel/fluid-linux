@@ -1,0 +1,25 @@
+#!/bin/bash
+mkdir -p /etc/skel/.config
+cat > /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc << CONF
+[Containments][1][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/backgrounds/borealoOS-wallpaper.png
+CONF
+
+mkdir -p /etc/skel/.local/share/plasma/look-and-feel
+
+sed -i 's/Debian GNU\/Linux/BorealOS/g' /etc/os-release 2>/dev/null || true
+sed -i 's/NAME="Debian GNU\/Linux"/NAME="BorealOS"/g' /etc/os-release 2>/dev/null || true
+sed -i 's/PRETTY_NAME="Debian GNU\/Linux.*"/PRETTY_NAME="BorealOS"/g' /etc/os-release 2>/dev/null || true
+sed -i 's/ID=debian/ID=borealoOS/g' /etc/os-release 2>/dev/null || true
+sed -i 's/HOME_URL=.*/HOME_URL="https:\/\/borealoOS.org"/g' /etc/os-release 2>/dev/null || true
+sed -i 's/SUPPORT_URL=.*/SUPPORT_URL="https:\/\/borealoOS.org"/g' /etc/os-release 2>/dev/null || true
+sed -i 's/BUG_REPORT_URL=.*/BUG_REPORT_URL="https:\/\/borealoOS.org"/g' /etc/os-release 2>/dev/null || true
+
+cat > /etc/issue << CONF
+BorealOS \n \l
+CONF
+cat > /etc/issue.net << CONF
+BorealOS
+CONF
+
+cp /usr/share/pixmaps/borealoس.svg /usr/share/pixmaps/debian-logo.png 2>/dev/null || true

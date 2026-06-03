@@ -1,7 +1,21 @@
 #!/bin/bash
 mkdir -p /etc/sddm.conf.d
-cat > /etc/sddm.conf.d/autologin.conf << EOF
+cat > /etc/sddm.conf.d/autologin.conf << CONF
 [Autologin]
 User=boreal
 Session=plasma
-EOF
+Relogin=true
+CONF
+
+mkdir -p /etc/sddm.conf.d
+cat > /etc/sddm.conf.d/theme.conf << CONF
+[Theme]
+Current=breeze
+CursorTheme=breeze_cursors
+CONF
+
+mkdir -p /usr/share/sddm/themes/breeze
+cat > /usr/share/sddm/themes/breeze/theme.conf.user << CONF
+[General]
+background=/usr/share/backgrounds/borealoOS-wallpaper.png
+CONF
