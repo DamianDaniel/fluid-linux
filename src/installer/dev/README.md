@@ -19,7 +19,7 @@ sudo bash build.sh
 
 ## Flash to USB
 ```bash
-dd if=borealos-amd64.hybrid.iso of=/dev/sdX bs=4M status=progress
+dd if=borealoس-amd64.hybrid.iso of=/dev/sdX bs=4M status=progress
 ```
 
 ## Notes
