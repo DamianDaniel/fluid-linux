@@ -6,7 +6,9 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-apt-get install -y live-build calamares calamares-settings-debian
+apt-get install -y live-build calamares calamares-settings-debian curl
+
+date -s "$(curl -sI google.com | grep -i '^date:' | cut -d' ' -f2-)"
 
 cd "$(dirname "$0")"
 lb clean
