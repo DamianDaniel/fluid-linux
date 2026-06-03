@@ -7,5 +7,5 @@ lb config noauto \
     --archive-areas "main contrib non-free non-free-firmware" \
     --bootappend-live "boot=live components username=boreal hostname=borealoOS autologin" \
     --linux-flavours amd64 \
-    --debootstrap-options "--exclude=systemd-sysv" \
+    --system live \
     "${@}"
