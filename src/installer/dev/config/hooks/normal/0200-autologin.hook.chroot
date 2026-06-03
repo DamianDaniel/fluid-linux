@@ -1,0 +1,7 @@
+#!/bin/bash
+mkdir -p /etc/sddm.conf.d
+cat > /etc/sddm.conf.d/autologin.conf << EOF
+[Autologin]
+User=boreal
+Session=plasma
+EOF

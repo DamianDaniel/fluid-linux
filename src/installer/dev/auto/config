@@ -1,0 +1,10 @@
+#!/bin/sh
+lb config noauto \
+    --distribution trixie \
+    --architectures amd64 \
+    --binary-images iso-hybrid \
+    --debian-installer none \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --bootappend-live "boot=live components username=boreal hostname=borealoس autologin" \
+    --linux-flavours amd64 \
+    "${@}"
