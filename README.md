@@ -1,6 +1,6 @@
 <img src=".assets/boreal-banner-neue-blurred.png" alt="BorealOS banner" style="width:100%;">
 
-- BorealOS is a Debian-based desktop Linux distribution for x86_64 systems. It aims to provide an optimized Debian experience without systemd, using Dinit.
+- BorealOS is a Debian-based desktop Linux distribution for x86_64 systems. It aims to provide an optimized Debian experience without systemd, using OpenRC.
 
 <br clear="all">
 
@@ -11,7 +11,7 @@
 | Base | Debian-based |
 | Architecture | x86_64 for now |
 | Target users | Intermediate Linux users |
-| Init system | Dinit |
+| Init system | OpenRC |
 | Shells | `sh` & `fish`|
 | Documentation | Documentation first, with focus on Man pages |
 
