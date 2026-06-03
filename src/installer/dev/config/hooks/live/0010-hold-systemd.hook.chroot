@@ -1,0 +1,3 @@
+#!/bin/bash
+echo "systemd-sysv hold" | dpkg --set-selections
+echo "systemd hold" | dpkg --set-selections

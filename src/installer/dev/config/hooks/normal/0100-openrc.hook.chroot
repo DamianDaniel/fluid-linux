@@ -1,5 +1,10 @@
 #!/bin/bash
-dpkg --force-depends --force-remove-essential -r systemd-sysv || true
-dpkg --force-depends --force-remove-essential -r systemd || true
-apt-get install -y --no-install-recommends -o APT::Force-LoopBreak=1 openrc sysvinit-core
-apt-get -f install -y || true
+echo "systemd-sysv hold" | dpkg --set-selections
+echo "systemd hold" | dpkg --set-selections
+dpkg --force-all -r systemd-sysv 2>/dev/null || true
+apt-get install -y --no-install-recommends \
+    -o APT::Force-LoopBreak=1 \
+    -o Dpkg::Options::="--force-all" \
+    openrc sysvinit-core
+dpkg --force-all -r systemd 2>/dev/null || true
+apt-get -f install -y 2>/dev/null || true
