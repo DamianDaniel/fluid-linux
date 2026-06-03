@@ -19,7 +19,6 @@
 
 ## Key Features
 
-- Own unit system forked off of systemd keeping compatibility but lighter.
 - Debain-based desktop operating system.
 - Community-driven development.
 - Pre-riced desktops and window managers.
