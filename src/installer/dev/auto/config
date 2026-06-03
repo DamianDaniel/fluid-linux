@@ -5,6 +5,9 @@ lb config noauto \
     --binary-images iso-hybrid \
     --debian-installer none \
     --archive-areas "main contrib non-free non-free-firmware" \
-    --bootappend-live "boot=live components username=boreal hostname=BorealOS autologin=boreal" \
+    --bootappend-live "boot=live components username=user hostname=BorealOS noeject" \
     --linux-flavours amd64 \
+    --iso-application "BorealOS" \
+    --iso-publisher "BorealOS" \
+    --iso-volume "BorealOS" \
     "${@}"

@@ -1,0 +1,8 @@
+title-text: "BorealOS"
+title-color: "#ffffff"
+desktop-color: "#0d1b2a"
+terminal-font: "Sans Regular 12"
+terminal-left: "0"
+terminal-top: "0"
+terminal-width: "100%"
+terminal-height: "100%"
