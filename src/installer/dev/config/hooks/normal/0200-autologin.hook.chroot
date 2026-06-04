@@ -1,31 +1,35 @@
 #!/bin/bash
-mkdir -p /etc/sddm.conf.d
+apt-get remove --purge -y sddm 2>/dev/null || true
 
-cat > /etc/sddm.conf.d/autologin.conf << CONF
-[Autologin]
-User=user
-Session=plasma
-Relogin=true
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf << CONF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin user --noclear %I $TERM
 CONF
 
-cat > /etc/sddm.conf << CONF
-[Autologin]
-User=user
-Session=plasma
-Relogin=true
-
-[Theme]
-Current=breeze
+mkdir -p /etc/init.d
+cat > /etc/init.d/tty1-autologin << CONF
+#!/sbin/openrc-run
+command="/sbin/agetty"
+command_args="--autologin user --noclear tty1 linux"
+command_background=true
+pidfile="/run/tty1-autologin.pid"
+depend() {
+    need localmount
+}
 CONF
+chmod +x /etc/init.d/tty1-autologin
+rc-update add tty1-autologin default 2>/dev/null || true
 
-mkdir -p /usr/share/sddm/themes/breeze
-cat > /usr/share/sddm/themes/breeze/theme.conf.user << CONF
-[General]
-background=/usr/share/backgrounds/borealoOS-wallpaper.png
-CONF
-
-if getent passwd user > /dev/null 2>&1; then
-    usermod -aG video,audio,input user
+cat > /etc/skel/.bash_profile << CONF
+if [ -z "\$DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
+    exec dbus-run-session startplasma-wayland
 fi
+CONF
 
-systemctl enable sddm 2>/dev/null || rc-update add sddm default 2>/dev/null || true
+cat > /root/.bash_profile << CONF
+if [ -z "\$DISPLAY" ] && [ "\$(tty)" = "/dev/tty1" ]; then
+    exec dbus-run-session startplasma-wayland
+fi
+CONF
