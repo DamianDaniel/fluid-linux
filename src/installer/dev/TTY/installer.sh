@@ -224,20 +224,17 @@ configure_network() {
     fi
 }
 
-install_wallpapers() {
-    mkdir -p /mnt/usr/share/wallpapers/BorealOS
-    cp /opt/borealOS/background_2.png   /mnt/usr/share/wallpapers/BorealOS/default.png
-    cp /opt/borealOS/background_one.png /mnt/usr/share/wallpapers/BorealOS/waves.png
-    mkdir -p /mnt/usr/share/pixmaps
-    cp /opt/borealOS/logo.png           /mnt/usr/share/pixmaps/borealOS-logo.png
-}
-
 chroot_install() {
     banner
     echo -e "${BLD}Configuring installed system...${RST}"
 
+    # Bind critical filesystems (order matters!)
     for d in dev proc sys run; do mount --bind /$d /mnt/$d; done
     cp /etc/resolv.conf /mnt/etc/resolv.conf
+
+    # Get UUID of root partition for fstab
+    ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
+    EFI_UUID=$(blkid -s UUID -o value "$EFI")
 
     case "$DE_CHOICE" in
         "KDE Plasma")     DE_PKGS="kde-plasma-desktop sddm" ;;
@@ -292,7 +289,7 @@ NMC
 chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
     fi
 
-    chroot /mnt /bin/bash <<CHROOT
+    chroot /mnt /bin/sh <<CHROOT || die "Chroot configuration failed"
 set -e
 
 echo "$HOSTNAME" > /etc/hostname
@@ -312,6 +309,12 @@ else
 fi
 locale-gen
 echo "LANG=$LOCALE" > /etc/locale.conf
+
+# Create fstab
+cat > /etc/fstab <<FSTAB
+UUID=$ROOT_UUID  /     ext4  defaults,relatime  0  1
+UUID=$EFI_UUID   /boot/efi  vfat  defaults,relatime  0  2
+FSTAB
 
 cat > /etc/os-release <<OS
 NAME="BorealOS"
@@ -336,7 +339,20 @@ echo "BorealOS"     > /etc/issue
 echo "BorealOS 1.0" > /etc/issue.net
 echo "BorealOS"     > /etc/debian_version
 
-apt-get update -qq
+# Install wallpapers and assets
+mkdir -p /usr/share/wallpapers/BorealOS
+mkdir -p /usr/share/pixmaps
+if [ -f /opt/borealOS/background_2.png ]; then
+    cp /opt/borealOS/background_2.png /usr/share/wallpapers/BorealOS/default.png
+fi
+if [ -f /opt/borealOS/background_one.png ]; then
+    cp /opt/borealOS/background_one.png /usr/share/wallpapers/BorealOS/waves.png
+fi
+if [ -f /opt/borealOS/logo.png ]; then
+    cp /opt/borealOS/logo.png /usr/share/pixmaps/borealOS-logo.png
+fi
+
+apt-get update -qq || true
 apt-get install -y --no-install-recommends \
     linux-image-amd64 grub-efi-amd64 efibootmgr \
     openrc \
@@ -344,7 +360,7 @@ apt-get install -y --no-install-recommends \
     neofetch \
     parted dosfstools e2fsprogs \
     sudo curl wget \
-    $DE_PKGS $SHELL_PKG
+    $DE_PKGS $SHELL_PKG 2>&1 || echo "Warning: Some packages failed to install"
 
 mkdir -p /etc/neofetch
 cat > /etc/neofetch/config.conf <<NEOF
@@ -370,9 +386,18 @@ echo "root:$ROOT_PASS" | chpasswd
 $USERS_SCRIPT
 $NET_SCRIPT
 
+# Setup boot loader
+if [ ! -d /boot/efi ]; then
+    mkdir -p /boot/efi
+fi
+
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=BorealOS --no-nvram 2>&1 || echo "Warning: grub-install had issues"
+sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub 2>/dev/null || true
+update-grub 2>&1 || echo "Warning: update-grub had issues"
+
 case "$DE_CHOICE" in
     "KDE Plasma")
-        rc-update add sddm default 2>/dev/null || ln -sf /etc/init.d/sddm /etc/rc2.d/S99sddm
+        rc-update add sddm default 2>/dev/null || ln -sf /etc/init.d/sddm /etc/rc2.d/S99sddm 2>/dev/null || true
         mkdir -p /etc/sddm.conf.d
         cat > /etc/sddm.conf.d/borealos.conf <<SDDM
 [General]
@@ -382,7 +407,7 @@ Background=/usr/share/wallpapers/BorealOS/default.png
 SDDM
         ;;
     "XFCE")
-        rc-update add lightdm default 2>/dev/null || ln -sf /etc/init.d/lightdm /etc/rc2.d/S99lightdm
+        rc-update add lightdm default 2>/dev/null || ln -sf /etc/init.d/lightdm /etc/rc2.d/S99lightdm 2>/dev/null || true
         mkdir -p /etc/lightdm
         cat >> /etc/lightdm/lightdm-gtk-greeter.conf <<LDM
 [greeter]
@@ -428,18 +453,21 @@ SWAY
         ;;
 esac
 
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=BorealOS
-sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub
-update-grub
-
-rc-update add NetworkManager default 2>/dev/null || ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager
+rc-update add NetworkManager default 2>/dev/null || ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager 2>/dev/null || true
 CHROOT
 
     echo -e "${GRN}Done.${RST}"
 }
 
 cleanup() {
-    umount -R /mnt 2>/dev/null || true
+    echo -e "${CYN}Cleaning up...${RST}"
+    # Unmount in reverse order
+    umount /mnt/sys 2>/dev/null || true
+    umount /mnt/proc 2>/dev/null || true
+    umount /mnt/dev 2>/dev/null || true
+    umount /mnt/run 2>/dev/null || true
+    umount /mnt/boot/efi 2>/dev/null || true
+    umount /mnt 2>/dev/null || true
 }
 
 finish() {
@@ -490,7 +518,6 @@ main() {
     partition_disk
     mount_target
     install_rootfs
-    install_wallpapers
     chroot_install
     cleanup
     finish
