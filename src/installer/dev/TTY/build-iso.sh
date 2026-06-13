@@ -137,13 +137,13 @@ CHROOT
 umount "$WORK/squashfs-root/sys" "$WORK/squashfs-root/proc" "$WORK/squashfs-root/dev"
 
 cat > "$WORK/squashfs-root/etc/inittab" <<'INITTAB'
-::sysinit:/sbin/openrc sysinit
-::sysinit:/sbin/openrc boot
-::wait:/sbin/openrc default
-1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux
-2:2345:respawn:/sbin/agetty tty2 38400 linux
-::ctrlaltdel:/sbin/reboot
-::shutdown:/sbin/openrc shutdown
+si::sysinit:/sbin/openrc sysinit
+sb::sysinit:/sbin/openrc boot
+rc::wait:/sbin/openrc default
+c1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux
+c2:2345:respawn:/sbin/agetty tty2 38400 linux
+ca::ctrlaltdel:/sbin/reboot
+sd::shutdown:/sbin/openrc shutdown
 INITTAB
 
 echo "==> Building SquashFS..."
