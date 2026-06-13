@@ -143,7 +143,7 @@ rc::wait:/sbin/openrc default
 c1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux
 c2:2345:respawn:/sbin/agetty tty2 38400 linux
 ca::ctrlaltdel:/sbin/reboot
-sd::shutdown:/sbin/openrc shutdown
+sd::once:/sbin/openrc shutdown
 INITTAB
 
 echo "==> Building SquashFS..."
@@ -160,7 +160,8 @@ cp "$INITRD"  "$WORK/iso/boot/initrd.img"
 
 echo "==> Writing GRUB config..."
 cat > "$WORK/iso/boot/grub/grub.cfg" <<'GRUB'
-set timeout=5
+set timeout_style=menu
+set timeout=10
 set default=0
 set menu_color_normal=cyan/black
 set menu_color_highlight=black/cyan
