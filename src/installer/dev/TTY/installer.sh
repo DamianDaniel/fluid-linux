@@ -246,7 +246,23 @@ configure_network() {
 }
 
 create_chroot_script() {
-    cat > /mnt/chroot-install.sh <<'SCRIPT'
+    # Prepare shell package name
+    SHELL_PKG=""
+    case "$SHELL_CHOICE" in
+        fish) SHELL_PKG="fish" ;;
+        sh) SHELL_PKG="" ;;
+        bash|*) SHELL_PKG="" ;;
+    esac
+    
+    # Prepare DE packages
+    DE_PKGS=""
+    case "$DE_CHOICE" in
+        "KDE Plasma") DE_PKGS="kde-plasma-desktop sddm" ;;
+        "XFCE") DE_PKGS="xfce4 xfce4-goodies lightdm lightdm-gtk-greeter" ;;
+        "Sway (Wayland)") DE_PKGS="sway swaybar swaybg swaylock waybar foot" ;;
+    esac
+    
+    cat > /mnt/chroot-install.sh <<SCRIPT
 #!/bin/sh
 set +e
 
@@ -365,6 +381,9 @@ chroot_install() {
     ROOT_UUID=$(blkid -s UUID -o value "$ROOT") || die "Failed to get root UUID"
     EFI_UUID=$(blkid -s UUID -o value "$EFI") || die "Failed to get EFI UUID"
     
+    echo "Creating chroot script with UUIDs..."
+    create_chroot_script
+    
     echo "Running chroot configuration..."
     chroot /mnt /bin/sh /chroot-install.sh 2>&1 | tail -30
 
@@ -437,7 +456,23 @@ main() {
     install_rootfs
     echo -e "${GRN}✓ Rootfs extraction OK${RST}"
     
-    create_chroot_script
+    # Build user and network configuration scripts
+    USERS_SCRIPT=""
+    for entry in "${EXTRA_USERS[@]}"; do
+        uname="${entry%%|*}"
+        upass="${entry##*|}"
+        USERS_SCRIPT+="useradd -m -s /bin/bash ${uname} 2>/dev/null || true"$'\n'
+        USERS_SCRIPT+="for group in sudo audio video netdev; do getent group \$group >/dev/null 2>&1 && usermod -aG \$group ${uname} 2>/dev/null || true; done"$'\n'
+        USERS_SCRIPT+="echo \"${uname}:${upass}\" | chpasswd 2>/dev/null || true"$'\n'
+    done
+    
+    NET_SCRIPT=""
+    if [ "$NET_TYPE" = "DHCP (automatic)" ]; then
+        NET_SCRIPT="mkdir -p /etc/NetworkManager/system-connections; cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<'NMEOF'\n[connection]\nid=${NET_IF}\ntype=ethernet\ninterface-name=${NET_IF}\n[ipv4]\nmethod=auto\n[ipv6]\nmethod=auto\nNMEOF\nchmod 600 /etc/NetworkManager/system-connections/\${NET_IF}.nmconnection"
+    elif [ "$NET_TYPE" = "Static IP" ]; then
+        NET_SCRIPT="mkdir -p /etc/NetworkManager/system-connections; cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<'NMEOF'\n[connection]\nid=${NET_IF}\ntype=ethernet\ninterface-name=${NET_IF}\n[ipv4]\nmethod=manual\naddresses=${NET_IP}\ngateway=${NET_GW}\ndns=${NET_DNS}\n[ipv6]\nmethod=auto\nNMEOF\nchmod 600 /etc/NetworkManager/system-connections/\${NET_IF}.nmconnection"
+    fi
+    
     chroot_install
     echo -e "${GRN}✓ Configuration OK${RST}"
     
