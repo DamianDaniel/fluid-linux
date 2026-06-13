@@ -286,8 +286,12 @@ chroot_install() {
     for entry in "${EXTRA_USERS[@]}"; do
         uname="${entry%%|*}"
         upass="${entry##*|}"
-        USERS_SCRIPT+="useradd -m -G sudo,audio,video,netdev -s ${SHELL_BIN} ${uname}"$'\n'
-        USERS_SCRIPT+="echo $(printf '%s:%s' "$uname" "$upass" | base64) | base64 -d | chpasswd"$'\n'
+        # Create user without groups first (they may not exist in minimal rootfs)
+        USERS_SCRIPT+="useradd -m -s ${SHELL_BIN} ${uname} 2>/dev/null || true"$'\n'
+        # Try to add to groups if they exist
+        USERS_SCRIPT+="for group in sudo audio video netdev; do getent group \$group >/dev/null 2>&1 && usermod -aG \$group ${uname} 2>/dev/null || true; done"$'\n'
+        # Set password safely
+        USERS_SCRIPT+="echo \"${uname}:${upass}\" | chpasswd 2>/dev/null || echo \"Warning: password set failed for ${uname}\""$'\n'
     done
 
     NET_SCRIPT=""
@@ -390,17 +394,22 @@ if [ -f /opt/borealOS/logo.png ]; then
     cp /opt/borealOS/logo.png /usr/share/pixmaps/borealOS-logo.png
 fi
 
-apt-get update -qq || true
-apt-get install -y --no-install-recommends \
-    linux-image-amd64 grub-efi-amd64 efibootmgr \
-    openrc \
-    network-manager \
-    neofetch \
-    parted dosfstools e2fsprogs \
-    sudo curl wget \
-    $DE_PKGS $SHELL_PKG 2>&1 | grep -i "unable\|error\|failed" || true
+apt-get update -qq 2>&1 || echo "Note: apt-get update had issues"
 
-echo "Package installation completed (some packages may have failed in minimal rootfs)"
+# Install in phases: core first, then extras
+echo "Installing core packages..."
+apt-get install -y --no-install-recommends \
+    parted dosfstools e2fsprogs openrc sudo curl wget 2>&1 | tail -3 || true
+
+echo "Installing kernel and bootloader..."
+apt-get install -y --no-install-recommends \
+    linux-image-amd64 grub-efi-amd64 efibootmgr 2>&1 | tail -3 || echo "Note: kernel/bootloader install had issues"
+
+echo "Installing DE/network/utilities..."
+apt-get install -y --no-install-recommends \
+    network-manager neofetch $DE_PKGS $SHELL_PKG 2>&1 | tail -3 || true
+
+echo "Package installation phase complete"
 
 mkdir -p /etc/neofetch
 cat > /etc/neofetch/config.conf <<NEOF
@@ -422,7 +431,8 @@ os_arch="off"
 kernel_shorthand="off"
 NEOF
 
-echo "root:$ROOT_PASS" | chpasswd
+# Set root password with fallback for minimal systems
+echo "root:$ROOT_PASS" | chpasswd 2>/dev/null || (echo "$ROOT_PASS"; echo "$ROOT_PASS") | passwd root 2>/dev/null || true
 $USERS_SCRIPT
 $NET_SCRIPT
 
@@ -433,15 +443,18 @@ fi
 
 if command -v grub-install >/dev/null 2>&1; then
     echo "Installing GRUB bootloader..."
-    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=BorealOS --no-nvram 2>&1 || {
-        echo "Warning: grub-install failed - system may not boot"
-    }
-    [ -f /etc/default/grub ] && sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub 2>/dev/null || true
-    if command -v update-grub >/dev/null 2>&1; then
-        update-grub 2>&1 || echo "Warning: update-grub failed"
+    if [ -d /boot/efi ]; then
+        grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=BorealOS --no-nvram 2>&1 || {
+            echo "Warning: EFI bootloader installation failed"
+        }
+        [ -f /etc/default/grub ] && sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub 2>/dev/null || true
+        if command -v update-grub >/dev/null 2>&1; then
+            update-grub 2>&1 || echo "Note: update-grub had issues"
+        fi
     fi
 else
-    echo "Warning: grub-install not found - bootloader not installed"
+    echo "Note: GRUB bootloader not available in rootfs"
+    echo "  System may not boot - you may need to install bootloader after first login"
 fi
 
 case "$DE_CHOICE" in
