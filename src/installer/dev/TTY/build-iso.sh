@@ -136,15 +136,12 @@ CHROOT
 
 umount "$WORK/squashfs-root/sys" "$WORK/squashfs-root/proc" "$WORK/squashfs-root/dev"
 
-cat > "$WORK/squashfs-root/etc/inittab" <<'INITTAB'
-si::sysinit:/sbin/openrc sysinit
-sb::sysinit:/sbin/openrc boot
-rc::wait:/sbin/openrc default
-c1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux
-c2:2345:respawn:/sbin/agetty tty2 38400 linux
-ca::ctrlaltdel:/sbin/reboot
-sd::once:/sbin/openrc shutdown
-INITTAB
+tar -xOf "$ROOTFS_TAR" ./etc/inittab > "$WORK/squashfs-root/etc/inittab"
+sed -i 's|^\(1:[0-9]*:respawn:.*getty\)|\1 --autologin root|' "$WORK/squashfs-root/etc/inittab"
+if ! grep -q "autologin" "$WORK/squashfs-root/etc/inittab"; then
+    sed -i '/^1:/d' "$WORK/squashfs-root/etc/inittab"
+    echo "1:2345:respawn:/sbin/agetty --autologin root --noclear 38400 tty1" >> "$WORK/squashfs-root/etc/inittab"
+fi
 
 echo "==> Building SquashFS..."
 mksquashfs "$WORK/squashfs-root" "$WORK/iso/live/filesystem.squashfs" \
