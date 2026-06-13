@@ -12,7 +12,7 @@ LOGO="./logo.png"
 die() { echo "ERROR: $1" >&2; exit 1; }
 
 for f in "$ROOTFS_TAR" "$INSTALLER_SH" "$WALLPAPER_DEFAULT" "$WALLPAPER_ALT" "$LOGO"; do
-    [ -f "$f" ] || die "Missing $f"
+    [ -f "$f" ] || die "Missing: $f"
 done
 [ "$EUID" -eq 0 ] || die "Run as root."
 
@@ -28,15 +28,15 @@ echo "==> Extracting rootfs..."
 tar -xzf "$ROOTFS_TAR" -C "$WORK/squashfs-root"
 
 echo "==> Injecting installer and assets..."
-mkdir -p "$WORK/squashfs-root/run/borealOS"
-cp "$ROOTFS_TAR"        "$WORK/squashfs-root/run/borealOS/rootfs.tar.gz"
-cp "$WALLPAPER_DEFAULT" "$WORK/squashfs-root/run/borealOS/background_2.png"
-cp "$WALLPAPER_ALT"     "$WORK/squashfs-root/run/borealOS/background_one.png"
-cp "$LOGO"              "$WORK/squashfs-root/run/borealOS/logo.png"
+mkdir -p "$WORK/squashfs-root/opt/borealOS"
+cp "$ROOTFS_TAR"        "$WORK/squashfs-root/opt/borealOS/rootfs.tar.gz"
+cp "$WALLPAPER_DEFAULT" "$WORK/squashfs-root/opt/borealOS/background_2.png"
+cp "$WALLPAPER_ALT"     "$WORK/squashfs-root/opt/borealOS/background_one.png"
+cp "$LOGO"              "$WORK/squashfs-root/opt/borealOS/logo.png"
 cp "$INSTALLER_SH"      "$WORK/squashfs-root/usr/local/bin/borealOS-install"
 chmod +x                "$WORK/squashfs-root/usr/local/bin/borealOS-install"
 
-echo "==> Applying branding to live environment..."
+echo "==> Applying branding..."
 cat > "$WORK/squashfs-root/etc/os-release" <<OS
 NAME="BorealOS"
 PRETTY_NAME="BorealOS 1.0"
@@ -56,9 +56,9 @@ DISTRIB_CODENAME=boreal
 DISTRIB_DESCRIPTION="BorealOS 1.0"
 LSB
 
-echo "BorealOS"     > "$WORK/squashfs-root/etc/issue"
-echo "BorealOS 1.0" > "$WORK/squashfs-root/etc/issue.net"
-echo "BorealOS"     > "$WORK/squashfs-root/etc/debian_version"
+echo "BorealOS"      > "$WORK/squashfs-root/etc/issue"
+echo "BorealOS 1.0"  > "$WORK/squashfs-root/etc/issue.net"
+echo "BorealOS"      > "$WORK/squashfs-root/etc/debian_version"
 echo "borealOS-live" > "$WORK/squashfs-root/etc/hostname"
 
 mkdir -p "$WORK/squashfs-root/usr/share/wallpapers/BorealOS"
@@ -100,14 +100,13 @@ if [ "$(tty)" = "/dev/tty1" ] && [ "$(id -u)" = "0" ]; then
 
   Welcome to BorealOS Live
   Run: borealOS-install   to install
-  Run: exit               to get a shell
 
 BANNER
     borealOS-install
 fi
 WELCOME
 
-echo "==> Installing kernel, live-boot and live tools into rootfs..."
+echo "==> Installing kernel, live-boot and tools..."
 mount --bind /dev  "$WORK/squashfs-root/dev"
 mount --bind /proc "$WORK/squashfs-root/proc"
 mount --bind /sys  "$WORK/squashfs-root/sys"
@@ -150,8 +149,8 @@ mksquashfs "$WORK/squashfs-root" "$WORK/iso/live/filesystem.squashfs" \
 echo "==> Copying kernel and initrd..."
 VMLINUZ=$(ls "$WORK/squashfs-root/boot/vmlinuz-"* 2>/dev/null | sort -V | tail -1)
 INITRD=$(ls  "$WORK/squashfs-root/boot/initrd.img-"* 2>/dev/null | sort -V | tail -1)
-[ -f "$VMLINUZ" ] || die "No kernel found in rootfs."
-[ -f "$INITRD"  ] || die "No initrd found in rootfs."
+[ -f "$VMLINUZ" ] || die "No kernel found."
+[ -f "$INITRD"  ] || die "No initrd found."
 cp "$VMLINUZ" "$WORK/iso/boot/vmlinuz"
 cp "$INITRD"  "$WORK/iso/boot/initrd.img"
 

@@ -1,11 +1,15 @@
 #!/bin/bash
-set -e
 
 RED='\033[0;31m'
 GRN='\033[0;32m'
 CYN='\033[0;36m'
 BLD='\033[1m'
 RST='\033[0m'
+
+EXTRA_USERS=()
+DE_CHOICE=""
+SHELL_CHOICE=""
+NET_TYPE=""
 
 die() { echo -e "${RED}ERROR: $1${RST}" >&2; cleanup; exit 1; }
 
@@ -38,15 +42,15 @@ ask() {
 ask_pass() {
     local prompt="$1" var="$2"
     while true; do
-        echo -ne "${CYN}${prompt}${RST}: "
-        read -rs pass1; echo
-        echo -ne "${CYN}Confirm ${prompt}${RST}: "
-        read -rs pass2; echo
-        if [ "$pass1" = "$pass2" ] && [ -n "$pass1" ]; then
-            printf -v "$var" '%s' "$pass1"
+        echo -ne "${CYN}${prompt}${RST} (doesn't echo): "
+        read -rs p1; echo
+        echo -ne "${CYN}Confirm ${prompt}${RST} (doesn't echo): "
+        read -rs p2; echo
+        if [ -n "$p1" ] && [ "$p1" = "$p2" ]; then
+            printf -v "$var" '%s' "$p1"
             return
         fi
-        echo -e "${RED}Passwords do not match or are empty.${RST}"
+        echo -e "${RED}Passwords do not match or are empty. Try again.${RST}"
     done
 }
 
@@ -64,7 +68,7 @@ menu() {
             MENU_RESULT="${options[$((choice-1))]}"
             return
         fi
-        echo -e "${RED}Invalid choice.${RST}"
+        echo -e "${RED}Invalid.${RST}"
     done
 }
 
@@ -116,7 +120,8 @@ mount_target() {
 install_rootfs() {
     banner
     echo -e "${BLD}Installing base system...${RST}"
-    tar -xzf /run/borealOS/rootfs.tar.gz -C /mnt
+    [ -f /opt/borealOS/rootfs.tar.gz ] || die "Rootfs not found at /opt/borealOS/rootfs.tar.gz"
+    tar -xzf /opt/borealOS/rootfs.tar.gz -C /mnt
     echo -e "${GRN}Done.${RST}"
 }
 
@@ -134,22 +139,33 @@ select_shell() {
 
 select_timezone() {
     banner
-    echo -e "${BLD}Available regions (type to filter or press enter to list all):${RST}"
-    echo -ne "${CYN}Region filter${RST}: "
-    read -r tz_filter
+    echo -e "${BLD}Timezone selection${RST}"
+    echo "Type part of a timezone name to filter (e.g. 'Europe', 'Berlin', 'US')."
+    echo "Leave blank to list all."
     echo
-    mapfile -t tz_list < <(timedatectl list-timezones 2>/dev/null | grep -i "${tz_filter}" | head -40)
+    echo -ne "${CYN}Filter${RST}: "
+    read -r tz_filter
+
+    mapfile -t tz_list < <(find /usr/share/zoneinfo -type f | sed 's|/usr/share/zoneinfo/||' | grep -v "^posix\|^right\|\.tab$\|^leap" | sort | grep -i "${tz_filter}")
+
     if [ ${#tz_list[@]} -eq 0 ]; then
-        echo -e "${RED}No timezones matched. Defaulting to UTC.${RST}"
-        TIMEZONE="UTC"
+        echo -e "${RED}No matches. Enter manually.${RST}"
+        ask "Timezone" TIMEZONE "UTC"
         return
     fi
+
+    if [ ${#tz_list[@]} -gt 40 ]; then
+        echo -e "${RED}${#tz_list[@]} results. Refine your filter.${RST}"
+        select_timezone
+        return
+    fi
+
     for i in "${!tz_list[@]}"; do
         echo "  $((i+1))) ${tz_list[$i]}"
     done
     echo
     while true; do
-        echo -ne "${CYN}Choice (or 0 to type manually)${RST}: "
+        echo -ne "${CYN}Choice (0 = enter manually)${RST}: "
         read -r choice
         if [ "$choice" = "0" ]; then
             ask "Timezone" TIMEZONE "UTC"
@@ -173,52 +189,52 @@ get_user_info() {
 
 get_extra_users() {
     banner
-    EXTRA_USERS=()
-    echo -e "${BLD}User accounts${RST}"
-    echo "Add non-root user accounts. Enter blank name when done."
+    echo -e "${BLD}Extra user accounts${RST}"
+    echo "Leave username blank to stop."
     echo
     while true; do
         echo -ne "${CYN}Username (blank to stop)${RST}: "
         read -r uname
         [ -z "$uname" ] && break
         ask_pass "Password for $uname" upass
-        EXTRA_USERS+=("$uname:$upass")
-        echo -e "${GRN}Added $uname.${RST}"
+        EXTRA_USERS+=("${uname}|${upass}")
+        echo -e "${GRN}Added: $uname${RST}"
     done
 }
 
 configure_network() {
     banner
-    echo -e "${BLD}Network configuration${RST}"
-    echo
-    menu "Network type:" "DHCP (automatic)" "Static IP" "Skip (configure later)"
+    menu "Network configuration:" "DHCP (automatic)" "Static IP" "Skip (configure later)"
     NET_TYPE="$MENU_RESULT"
 
+    if [ "$NET_TYPE" = "Skip (configure later)" ]; then
+        return
+    fi
+
+    echo
+    echo -e "${BLD}Available interfaces:${RST}"
+    ip link show | grep -E "^[0-9]+:" | awk -F': ' '{print "  "$2}' | grep -v lo
+    echo
+    ask "Network interface" NET_IF "eth0"
+
     if [ "$NET_TYPE" = "Static IP" ]; then
-        ip link show | grep -E "^[0-9]+:" | awk '{print $2}' | tr -d ':'
-        echo
-        ask "Network interface (e.g. eth0)" NET_IF "eth0"
-        ask "IP address (e.g. 192.168.1.100/24)" NET_IP
-        ask "Gateway (e.g. 192.168.1.1)" NET_GW
-        ask "DNS server" NET_DNS "1.1.1.1"
-    elif [ "$NET_TYPE" = "DHCP (automatic)" ]; then
-        ip link show | grep -E "^[0-9]+:" | awk '{print $2}' | tr -d ':'
-        echo
-        ask "Network interface (e.g. eth0)" NET_IF "eth0"
+        ask "IP address with prefix (e.g. 192.168.1.100/24)" NET_IP
+        ask "Gateway" NET_GW
+        ask "DNS" NET_DNS "1.1.1.1"
     fi
 }
 
 install_wallpapers() {
     mkdir -p /mnt/usr/share/wallpapers/BorealOS
-    cp /run/borealOS/background_2.png   /mnt/usr/share/wallpapers/BorealOS/default.png
-    cp /run/borealOS/background_one.png /mnt/usr/share/wallpapers/BorealOS/waves.png
+    cp /opt/borealOS/background_2.png   /mnt/usr/share/wallpapers/BorealOS/default.png
+    cp /opt/borealOS/background_one.png /mnt/usr/share/wallpapers/BorealOS/waves.png
     mkdir -p /mnt/usr/share/pixmaps
-    cp /run/borealOS/logo.png           /mnt/usr/share/pixmaps/borealOS-logo.png
+    cp /opt/borealOS/logo.png           /mnt/usr/share/pixmaps/borealOS-logo.png
 }
 
 chroot_install() {
     banner
-    echo -e "${BLD}Configuring system in chroot...${RST}"
+    echo -e "${BLD}Configuring installed system...${RST}"
 
     for d in dev proc sys run; do mount --bind /$d /mnt/$d; done
     cp /etc/resolv.conf /mnt/etc/resolv.conf
@@ -238,15 +254,16 @@ chroot_install() {
 
     USERS_SCRIPT=""
     for entry in "${EXTRA_USERS[@]}"; do
-        uname="${entry%%:*}"
-        upass="${entry##*:}"
-        USERS_SCRIPT+="useradd -m -G sudo,audio,video,netdev -s $SHELL_BIN $uname"$'\n'
-        USERS_SCRIPT+="echo '$uname:$upass' | chpasswd"$'\n'
+        uname="${entry%%|*}"
+        upass="${entry##*|}"
+        USERS_SCRIPT+="useradd -m -G sudo,audio,video,netdev -s ${SHELL_BIN} ${uname}"$'\n'
+        USERS_SCRIPT+="echo $(printf '%s:%s' "$uname" "$upass" | base64) | base64 -d | chpasswd"$'\n'
     done
 
     NET_SCRIPT=""
     if [ "$NET_TYPE" = "DHCP (automatic)" ]; then
-        NET_SCRIPT="cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<NMC
+        NET_SCRIPT="mkdir -p /etc/NetworkManager/system-connections
+cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<NMC
 [connection]
 id=${NET_IF}
 type=ethernet
@@ -258,7 +275,8 @@ method=auto
 NMC
 chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
     elif [ "$NET_TYPE" = "Static IP" ]; then
-        NET_SCRIPT="cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<NMC
+        NET_SCRIPT="mkdir -p /etc/NetworkManager/system-connections
+cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<NMC
 [connection]
 id=${NET_IF}
 type=ethernet
@@ -285,8 +303,13 @@ cat > /etc/hosts <<HOSTS
 HOSTS
 
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
+echo "$TIMEZONE" > /etc/timezone
 
-sed -i "s/# *$LOCALE/$LOCALE/" /etc/locale.gen 2>/dev/null || echo "$LOCALE UTF-8" >> /etc/locale.gen
+if grep -q "^#.*$LOCALE" /etc/locale.gen 2>/dev/null; then
+    sed -i "s/^#.*$LOCALE/$LOCALE/" /etc/locale.gen
+else
+    echo "$LOCALE UTF-8" >> /etc/locale.gen
+fi
 locale-gen
 echo "LANG=$LOCALE" > /etc/locale.conf
 
@@ -309,9 +332,9 @@ DISTRIB_CODENAME=boreal
 DISTRIB_DESCRIPTION="BorealOS 1.0"
 LSB
 
-echo "BorealOS" > /etc/issue
+echo "BorealOS"     > /etc/issue
 echo "BorealOS 1.0" > /etc/issue.net
-echo "BorealOS" > /etc/debian_version
+echo "BorealOS"     > /etc/debian_version
 
 apt-get update -qq
 apt-get install -y --no-install-recommends \
@@ -345,13 +368,11 @@ NEOF
 
 echo "root:$ROOT_PASS" | chpasswd
 $USERS_SCRIPT
-
-mkdir -p /etc/NetworkManager/system-connections
 $NET_SCRIPT
 
 case "$DE_CHOICE" in
     "KDE Plasma")
-        rc-update add sddm default
+        rc-update add sddm default 2>/dev/null || ln -sf /etc/init.d/sddm /etc/rc2.d/S99sddm
         mkdir -p /etc/sddm.conf.d
         cat > /etc/sddm.conf.d/borealos.conf <<SDDM
 [General]
@@ -361,7 +382,7 @@ Background=/usr/share/wallpapers/BorealOS/default.png
 SDDM
         ;;
     "XFCE")
-        rc-update add lightdm default
+        rc-update add lightdm default 2>/dev/null || ln -sf /etc/init.d/lightdm /etc/rc2.d/S99lightdm
         mkdir -p /etc/lightdm
         cat >> /etc/lightdm/lightdm-gtk-greeter.conf <<LDM
 [greeter]
@@ -411,10 +432,10 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Borea
 sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub
 update-grub
 
-rc-update add NetworkManager default
+rc-update add NetworkManager default 2>/dev/null || ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager
 CHROOT
 
-    echo -e "${GRN}Chroot done.${RST}"
+    echo -e "${GRN}Done.${RST}"
 }
 
 cleanup() {
@@ -434,7 +455,7 @@ finish() {
     case "$MENU_RESULT" in
         "Reboot") reboot ;;
         "Drop to shell")
-            echo -e "${CYN}Entering shell. Type 'reboot' when done.${RST}"
+            echo -e "${CYN}Type 'reboot' when done.${RST}"
             bash
             ;;
     esac
@@ -445,7 +466,7 @@ main() {
     banner
     echo -e "${BLD}Welcome to the BorealOS Installer${RST}"
     echo
-    confirm "Begin installation?" || die "Aborted."
+    confirm "Begin?" || die "Aborted."
 
     select_disk
     get_user_info
@@ -456,13 +477,13 @@ main() {
 
     banner
     echo -e "${BLD}Summary:${RST}"
-    echo "  Disk:      $DISK"
-    echo "  Hostname:  $HOSTNAME"
-    echo "  Timezone:  $TIMEZONE"
-    echo "  DE/WM:     $DE_CHOICE"
-    echo "  Shell:     $SHELL_CHOICE"
-    echo "  Network:   $NET_TYPE"
-    echo "  Extra users: ${#EXTRA_USERS[@]}"
+    echo "  Disk:         $DISK"
+    echo "  Hostname:     $HOSTNAME"
+    echo "  Timezone:     $TIMEZONE"
+    echo "  DE/WM:        $DE_CHOICE"
+    echo "  Shell:        $SHELL_CHOICE"
+    echo "  Network:      $NET_TYPE"
+    echo "  Extra users:  ${#EXTRA_USERS[@]}"
     echo
     confirm "Proceed?" || die "Aborted."
 
