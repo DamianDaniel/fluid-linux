@@ -7,7 +7,7 @@ CYN='\033[0;36m'
 BLD='\033[1m'
 RST='\033[0m'
 
-die() { echo -e "${RED}ERROR: $1${RST}" >&2; exit 1; }
+die() { echo -e "${RED}ERROR: $1${RST}" >&2; cleanup; exit 1; }
 
 banner() {
     clear
@@ -32,6 +32,21 @@ ask() {
         input="${input:-$default}"
         [ -n "$input" ] && { printf -v "$var" '%s' "$input"; return; }
         echo -e "${RED}Cannot be empty.${RST}"
+    done
+}
+
+ask_pass() {
+    local prompt="$1" var="$2"
+    while true; do
+        echo -ne "${CYN}${prompt}${RST}: "
+        read -rs pass1; echo
+        echo -ne "${CYN}Confirm ${prompt}${RST}: "
+        read -rs pass2; echo
+        if [ "$pass1" = "$pass2" ] && [ -n "$pass1" ]; then
+            printf -v "$var" '%s' "$pass1"
+            return
+        fi
+        echo -e "${RED}Passwords do not match or are empty.${RST}"
     done
 }
 
@@ -66,6 +81,7 @@ check_root() {
 select_disk() {
     banner
     echo -e "${BLD}Available disks:${RST}"
+    echo
     lsblk -dpno NAME,SIZE,MODEL | grep -v "loop\|sr0"
     echo
     ask "Target disk (e.g. /dev/sda)" DISK
@@ -116,20 +132,87 @@ select_shell() {
     SHELL_CHOICE="$MENU_RESULT"
 }
 
+select_timezone() {
+    banner
+    echo -e "${BLD}Available regions (type to filter or press enter to list all):${RST}"
+    echo -ne "${CYN}Region filter${RST}: "
+    read -r tz_filter
+    echo
+    mapfile -t tz_list < <(timedatectl list-timezones 2>/dev/null | grep -i "${tz_filter}" | head -40)
+    if [ ${#tz_list[@]} -eq 0 ]; then
+        echo -e "${RED}No timezones matched. Defaulting to UTC.${RST}"
+        TIMEZONE="UTC"
+        return
+    fi
+    for i in "${!tz_list[@]}"; do
+        echo "  $((i+1))) ${tz_list[$i]}"
+    done
+    echo
+    while true; do
+        echo -ne "${CYN}Choice (or 0 to type manually)${RST}: "
+        read -r choice
+        if [ "$choice" = "0" ]; then
+            ask "Timezone" TIMEZONE "UTC"
+            return
+        fi
+        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#tz_list[@]} )); then
+            TIMEZONE="${tz_list[$((choice-1))]}"
+            return
+        fi
+        echo -e "${RED}Invalid.${RST}"
+    done
+}
+
 get_user_info() {
     banner
     ask "Hostname" HOSTNAME "borealOS"
-    ask "Root password" ROOT_PASS
-    ask "New username" USERNAME
-    ask "User password" USER_PASS
-    ask "Timezone (e.g. Europe/Berlin)" TIMEZONE "UTC"
+    ask_pass "Root password" ROOT_PASS
     ask "Locale (e.g. en_US.UTF-8)" LOCALE "en_US.UTF-8"
+    select_timezone
+}
+
+get_extra_users() {
+    banner
+    EXTRA_USERS=()
+    echo -e "${BLD}User accounts${RST}"
+    echo "Add non-root user accounts. Enter blank name when done."
+    echo
+    while true; do
+        echo -ne "${CYN}Username (blank to stop)${RST}: "
+        read -r uname
+        [ -z "$uname" ] && break
+        ask_pass "Password for $uname" upass
+        EXTRA_USERS+=("$uname:$upass")
+        echo -e "${GRN}Added $uname.${RST}"
+    done
+}
+
+configure_network() {
+    banner
+    echo -e "${BLD}Network configuration${RST}"
+    echo
+    menu "Network type:" "DHCP (automatic)" "Static IP" "Skip (configure later)"
+    NET_TYPE="$MENU_RESULT"
+
+    if [ "$NET_TYPE" = "Static IP" ]; then
+        ip link show | grep -E "^[0-9]+:" | awk '{print $2}' | tr -d ':'
+        echo
+        ask "Network interface (e.g. eth0)" NET_IF "eth0"
+        ask "IP address (e.g. 192.168.1.100/24)" NET_IP
+        ask "Gateway (e.g. 192.168.1.1)" NET_GW
+        ask "DNS server" NET_DNS "1.1.1.1"
+    elif [ "$NET_TYPE" = "DHCP (automatic)" ]; then
+        ip link show | grep -E "^[0-9]+:" | awk '{print $2}' | tr -d ':'
+        echo
+        ask "Network interface (e.g. eth0)" NET_IF "eth0"
+    fi
 }
 
 install_wallpapers() {
     mkdir -p /mnt/usr/share/wallpapers/BorealOS
-    cp /run/borealOS/background_2.png  /mnt/usr/share/wallpapers/BorealOS/default.png
+    cp /run/borealOS/background_2.png   /mnt/usr/share/wallpapers/BorealOS/default.png
     cp /run/borealOS/background_one.png /mnt/usr/share/wallpapers/BorealOS/waves.png
+    mkdir -p /mnt/usr/share/pixmaps
     cp /run/borealOS/logo.png           /mnt/usr/share/pixmaps/borealOS-logo.png
 }
 
@@ -141,17 +224,55 @@ chroot_install() {
     cp /etc/resolv.conf /mnt/etc/resolv.conf
 
     case "$DE_CHOICE" in
-        "KDE Plasma") DE_PKGS="kde-plasma-desktop sddm" ;;
-        "XFCE")       DE_PKGS="xfce4 xfce4-goodies lightdm lightdm-gtk-greeter" ;;
+        "KDE Plasma")     DE_PKGS="kde-plasma-desktop sddm" ;;
+        "XFCE")           DE_PKGS="xfce4 xfce4-goodies lightdm lightdm-gtk-greeter" ;;
         "Sway (Wayland)") DE_PKGS="sway swaybar swaybg swaylock waybar foot" ;;
-        *)            DE_PKGS="" ;;
+        *)                DE_PKGS="" ;;
     esac
 
     case "$SHELL_CHOICE" in
         fish) SHELL_PKG="fish"; SHELL_BIN="/usr/bin/fish" ;;
-        sh)   SHELL_PKG=""; SHELL_BIN="/bin/sh" ;;
-        *)    SHELL_PKG=""; SHELL_BIN="/bin/bash" ;;
+        sh)   SHELL_PKG="";    SHELL_BIN="/bin/sh" ;;
+        *)    SHELL_PKG="";    SHELL_BIN="/bin/bash" ;;
     esac
+
+    USERS_SCRIPT=""
+    for entry in "${EXTRA_USERS[@]}"; do
+        uname="${entry%%:*}"
+        upass="${entry##*:}"
+        USERS_SCRIPT+="useradd -m -G sudo,audio,video,netdev -s $SHELL_BIN $uname"$'\n'
+        USERS_SCRIPT+="echo '$uname:$upass' | chpasswd"$'\n'
+    done
+
+    NET_SCRIPT=""
+    if [ "$NET_TYPE" = "DHCP (automatic)" ]; then
+        NET_SCRIPT="cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<NMC
+[connection]
+id=${NET_IF}
+type=ethernet
+interface-name=${NET_IF}
+[ipv4]
+method=auto
+[ipv6]
+method=auto
+NMC
+chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
+    elif [ "$NET_TYPE" = "Static IP" ]; then
+        NET_SCRIPT="cat > /etc/NetworkManager/system-connections/${NET_IF}.nmconnection <<NMC
+[connection]
+id=${NET_IF}
+type=ethernet
+interface-name=${NET_IF}
+[ipv4]
+method=manual
+addresses=${NET_IP}
+gateway=${NET_GW}
+dns=${NET_DNS}
+[ipv6]
+method=auto
+NMC
+chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
+    fi
 
     chroot /mnt /bin/bash <<CHROOT
 set -e
@@ -165,7 +286,7 @@ HOSTS
 
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 
-sed -i "s/# *$LOCALE/$LOCALE/" /etc/locale.gen
+sed -i "s/# *$LOCALE/$LOCALE/" /etc/locale.gen 2>/dev/null || echo "$LOCALE UTF-8" >> /etc/locale.gen
 locale-gen
 echo "LANG=$LOCALE" > /etc/locale.conf
 
@@ -181,7 +302,6 @@ SUPPORT_URL="https://borealos.org"
 BUG_REPORT_URL="https://borealos.org"
 OS
 
-rm -f /etc/lsb-release
 cat > /etc/lsb-release <<LSB
 DISTRIB_ID=BorealOS
 DISTRIB_RELEASE=1.0
@@ -199,6 +319,7 @@ apt-get install -y --no-install-recommends \
     openrc \
     networkmanager \
     neofetch \
+    parted dosfstools e2fsprogs \
     sudo curl wget \
     $DE_PKGS $SHELL_PKG
 
@@ -222,16 +343,11 @@ os_arch="off"
 kernel_shorthand="off"
 NEOF
 
-mkdir -p /etc/profile.d
-cat > /etc/profile.d/neofetch-override.sh <<NEO
-export NEOFETCH_DISTRO="BorealOS 1.0"
-NEO
-
 echo "root:$ROOT_PASS" | chpasswd
-useradd -m -G sudo,audio,video,netdev -s $SHELL_BIN $USERNAME
-echo "$USERNAME:$USER_PASS" | chpasswd
+$USERS_SCRIPT
 
-cp /usr/share/wallpapers/BorealOS/default.png /usr/share/wallpapers/BorealOS/default.png
+mkdir -p /etc/NetworkManager/system-connections
+$NET_SCRIPT
 
 case "$DE_CHOICE" in
     "KDE Plasma")
@@ -240,16 +356,9 @@ case "$DE_CHOICE" in
         cat > /etc/sddm.conf.d/borealos.conf <<SDDM
 [General]
 DisplayServer=x11
-
 [Theme]
 Background=/usr/share/wallpapers/BorealOS/default.png
 SDDM
-        mkdir -p /etc/plasma-workspace/env
-        cat > /usr/share/plasma/look-and-feel/borealos/contents/defaults <<PLASMA
-[Wallpaper]
-Image=file:///usr/share/wallpapers/BorealOS/default.png
-PLASMA
-        kwriteconfig5 --file kdeglobals --group "KDE" --key "LookAndFeelPackage" "org.kde.breeze.desktop" 2>/dev/null || true
         ;;
     "XFCE")
         rc-update add lightdm default
@@ -281,9 +390,7 @@ XFCE
 set \$mod Mod4
 font pango:monospace 10
 output * bg /usr/share/wallpapers/BorealOS/default.png fill
-input type:keyboard {
-    xkb_layout us
-}
+input type:keyboard { xkb_layout us }
 bindsym \$mod+Return exec foot
 bindsym \$mod+d exec dmenu_run
 bindsym \$mod+Shift+q kill
@@ -297,9 +404,6 @@ bar {
     }
 }
 SWAY
-        mkdir -p /home/$USERNAME/.config/sway
-        cp /etc/sway/config /home/$USERNAME/.config/sway/config
-        chown -R $USERNAME:$USERNAME /home/$USERNAME/.config
         ;;
 esac
 
@@ -308,17 +412,12 @@ sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub
 update-grub
 
 rc-update add NetworkManager default
-
-dpkg-query -l 2>/dev/null | grep -i "debian\|raspbian" | awk '{print $2}' | xargs apt-get remove -y --purge 2>/dev/null || true
-rm -f /usr/share/doc/*/copyright 2>/dev/null || true
-
 CHROOT
 
     echo -e "${GRN}Chroot done.${RST}"
 }
 
 cleanup() {
-    echo -e "${BLD}Unmounting...${RST}"
     umount -R /mnt 2>/dev/null || true
 }
 
@@ -329,33 +428,41 @@ finish() {
     echo "  Disk:    $DISK"
     echo "  DE/WM:   $DE_CHOICE"
     echo "  Shell:   $SHELL_CHOICE"
-    echo "  User:    $USERNAME"
     echo "  Host:    $HOSTNAME"
     echo
-    confirm "Reboot now?" && reboot
+    menu "What now?" "Reboot" "Drop to shell"
+    case "$MENU_RESULT" in
+        "Reboot") reboot ;;
+        "Drop to shell")
+            echo -e "${CYN}Entering shell. Type 'reboot' when done.${RST}"
+            bash
+            ;;
+    esac
 }
 
 main() {
     check_root
     banner
     echo -e "${BLD}Welcome to the BorealOS Installer${RST}"
-    echo "This will install BorealOS onto your system."
     echo
     confirm "Begin installation?" || die "Aborted."
 
     select_disk
     get_user_info
+    get_extra_users
     select_de
     select_shell
+    configure_network
 
     banner
     echo -e "${BLD}Summary:${RST}"
     echo "  Disk:      $DISK"
     echo "  Hostname:  $HOSTNAME"
-    echo "  User:      $USERNAME"
     echo "  Timezone:  $TIMEZONE"
     echo "  DE/WM:     $DE_CHOICE"
     echo "  Shell:     $SHELL_CHOICE"
+    echo "  Network:   $NET_TYPE"
+    echo "  Extra users: ${#EXTRA_USERS[@]}"
     echo
     confirm "Proceed?" || die "Aborted."
 

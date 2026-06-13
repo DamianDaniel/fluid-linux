@@ -16,9 +16,9 @@ for f in "$ROOTFS_TAR" "$INSTALLER_SH" "$WALLPAPER_DEFAULT" "$WALLPAPER_ALT" "$L
 done
 [ "$EUID" -eq 0 ] || die "Run as root."
 
-command -v xorriso      >/dev/null || apt-get install -y xorriso
+command -v xorriso       >/dev/null || apt-get install -y xorriso
 command -v grub-mkrescue >/dev/null || apt-get install -y grub-efi-amd64-bin grub-pc-bin mtools
-command -v mksquashfs   >/dev/null || apt-get install -y squashfs-tools
+command -v mksquashfs    >/dev/null || apt-get install -y squashfs-tools
 
 echo "==> Setting up work directory..."
 rm -rf "$WORK"
@@ -29,14 +29,14 @@ tar -xzf "$ROOTFS_TAR" -C "$WORK/squashfs-root"
 
 echo "==> Injecting installer and assets..."
 mkdir -p "$WORK/squashfs-root/run/borealOS"
-cp "$ROOTFS_TAR"         "$WORK/squashfs-root/run/borealOS/rootfs.tar.gz"
-cp "$WALLPAPER_DEFAULT"  "$WORK/squashfs-root/run/borealOS/background_2.png"
-cp "$WALLPAPER_ALT"      "$WORK/squashfs-root/run/borealOS/background_one.png"
-cp "$LOGO"               "$WORK/squashfs-root/run/borealOS/logo.png"
-cp "$INSTALLER_SH"       "$WORK/squashfs-root/usr/local/bin/borealOS-install"
-chmod +x                 "$WORK/squashfs-root/usr/local/bin/borealOS-install"
+cp "$ROOTFS_TAR"        "$WORK/squashfs-root/run/borealOS/rootfs.tar.gz"
+cp "$WALLPAPER_DEFAULT" "$WORK/squashfs-root/run/borealOS/background_2.png"
+cp "$WALLPAPER_ALT"     "$WORK/squashfs-root/run/borealOS/background_one.png"
+cp "$LOGO"              "$WORK/squashfs-root/run/borealOS/logo.png"
+cp "$INSTALLER_SH"      "$WORK/squashfs-root/usr/local/bin/borealOS-install"
+chmod +x                "$WORK/squashfs-root/usr/local/bin/borealOS-install"
 
-echo "==> Applying base branding to live environment..."
+echo "==> Applying branding to live environment..."
 cat > "$WORK/squashfs-root/etc/os-release" <<OS
 NAME="BorealOS"
 PRETTY_NAME="BorealOS 1.0"
@@ -56,9 +56,9 @@ DISTRIB_CODENAME=boreal
 DISTRIB_DESCRIPTION="BorealOS 1.0"
 LSB
 
-echo "BorealOS" > "$WORK/squashfs-root/etc/issue"
+echo "BorealOS"     > "$WORK/squashfs-root/etc/issue"
 echo "BorealOS 1.0" > "$WORK/squashfs-root/etc/issue.net"
-echo "BorealOS" > "$WORK/squashfs-root/etc/debian_version"
+echo "BorealOS"     > "$WORK/squashfs-root/etc/debian_version"
 echo "borealOS-live" > "$WORK/squashfs-root/etc/hostname"
 
 mkdir -p "$WORK/squashfs-root/usr/share/wallpapers/BorealOS"
@@ -107,11 +107,35 @@ BANNER
 fi
 WELCOME
 
-chroot "$WORK/squashfs-root" /bin/bash -c "echo 'root:borealOS' | chpasswd"
+echo "==> Installing kernel, live-boot and live tools into rootfs..."
+mount --bind /dev  "$WORK/squashfs-root/dev"
+mount --bind /proc "$WORK/squashfs-root/proc"
+mount --bind /sys  "$WORK/squashfs-root/sys"
+cp /etc/resolv.conf "$WORK/squashfs-root/etc/resolv.conf"
 
-mkdir -p "$WORK/squashfs-root/etc/inittab.d"
-sed -i 's|^1:.*|1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux|' \
-    "$WORK/squashfs-root/etc/inittab" 2>/dev/null || \
+chroot "$WORK/squashfs-root" /bin/bash <<CHROOT
+set -e
+apt-get update -qq
+apt-get install -y --no-install-recommends \
+    linux-image-amd64 \
+    live-boot \
+    live-boot-initramfs-tools \
+    parted \
+    dosfstools \
+    e2fsprogs \
+    passwd \
+    networkmanager \
+    iproute2 \
+    wpasupplicant \
+    tzdata \
+    locales \
+    sudo \
+    bash
+echo 'root:borealOS' | chpasswd
+CHROOT
+
+umount "$WORK/squashfs-root/sys" "$WORK/squashfs-root/proc" "$WORK/squashfs-root/dev"
+
 cat > "$WORK/squashfs-root/etc/inittab" <<'INITTAB'
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
@@ -121,20 +145,6 @@ cat > "$WORK/squashfs-root/etc/inittab" <<'INITTAB'
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/sbin/openrc shutdown
 INITTAB
-
-echo "==> Installing kernel and live-boot into rootfs..."
-mount --bind /dev  "$WORK/squashfs-root/dev"
-mount --bind /proc "$WORK/squashfs-root/proc"
-mount --bind /sys  "$WORK/squashfs-root/sys"
-cp /etc/resolv.conf "$WORK/squashfs-root/etc/resolv.conf"
-chroot "$WORK/squashfs-root" /bin/bash -c "
-    apt-get update -qq
-    apt-get install -y --no-install-recommends \
-        linux-image-amd64 \
-        live-boot \
-        live-boot-initramfs-tools
-"
-umount "$WORK/squashfs-root/dev" "$WORK/squashfs-root/proc" "$WORK/squashfs-root/sys"
 
 echo "==> Building SquashFS..."
 mksquashfs "$WORK/squashfs-root" "$WORK/iso/live/filesystem.squashfs" \
