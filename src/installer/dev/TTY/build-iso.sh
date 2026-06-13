@@ -3,7 +3,7 @@ set -e
 
 WORK="$(pwd)/iso-work"
 OUTPUT="borealOS.iso"
-ROOTFS_TAR="./borealOS-rootfs_tar.gz"
+ROOTFS_TAR="./borealOS-rootfs.tar.gz"
 INSTALLER_SH="./installer.sh"
 WALLPAPER_DEFAULT="./background_2.png"
 WALLPAPER_ALT="./background_one.png"
