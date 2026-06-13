@@ -60,7 +60,7 @@ Planned documentation areas include:
 BorealOS is currently in the early repository-structure and build-planning phase.
 
 The first technical milestone is a minimal Debian-based ISO that boots in a
-virtual machine with `Dinit` as PID 1.
+virtual machine with `OpenRC` as PID 1.
 
 <br>
 
