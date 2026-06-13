@@ -124,7 +124,7 @@ apt-get install -y --no-install-recommends \
     dosfstools \
     e2fsprogs \
     passwd \
-    networkmanager \
+    network-manager \
     iproute2 \
     wpasupplicant \
     tzdata \

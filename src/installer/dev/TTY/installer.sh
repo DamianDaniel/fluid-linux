@@ -317,7 +317,7 @@ apt-get update -qq
 apt-get install -y --no-install-recommends \
     linux-image-amd64 grub-efi-amd64 efibootmgr \
     openrc \
-    networkmanager \
+    network-manager \
     neofetch \
     parted dosfstools e2fsprogs \
     sudo curl wget \
