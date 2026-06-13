@@ -3,6 +3,7 @@
 RED='\033[0;31m'
 GRN='\033[0;32m'
 CYN='\033[0;36m'
+YEL='\033[1;33m'
 BLD='\033[1m'
 RST='\033[0m'
 
@@ -97,32 +98,59 @@ select_disk() {
 partition_disk() {
     banner
     echo -e "${BLD}Partitioning $DISK...${RST}"
-    parted -s "$DISK" mklabel gpt
-    parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB
-    parted -s "$DISK" set 1 esp on
-    parted -s "$DISK" mkpart primary ext4 513MiB 100%
+    parted -s "$DISK" mklabel gpt || die "Failed to create GPT label"
+    parted -s "$DISK" mkpart ESP fat32 1MiB 513MiB || die "Failed to create EFI partition"
+    parted -s "$DISK" set 1 esp on || die "Failed to set ESP flag"
+    parted -s "$DISK" mkpart primary ext4 513MiB 100% || die "Failed to create root partition"
+    
     if [[ "$DISK" == *nvme* ]]; then
         EFI="${DISK}p1"; ROOT="${DISK}p2"
     else
         EFI="${DISK}1"; ROOT="${DISK}2"
     fi
-    mkfs.fat -F32 -n EFI "$EFI"
-    mkfs.ext4 -L borealOS "$ROOT"
-    echo -e "${GRN}Done.${RST}"
+    
+    # Verify partitions exist
+    sleep 1  # Give kernel time to register new partitions
+    [ -b "$EFI" ] || die "EFI partition $EFI not found"
+    [ -b "$ROOT" ] || die "Root partition $ROOT not found"
+    
+    echo "Formatting EFI partition ($EFI)..."
+    mkfs.fat -F32 -n EFI "$EFI" || die "Failed to format EFI partition"
+    
+    echo "Formatting root partition ($ROOT)..."
+    mkfs.ext4 -F -L borealOS "$ROOT" || die "Failed to format root partition"
+    
+    echo -e "${GRN}Partitioning complete.${RST}"
 }
 
 mount_target() {
-    mount "$ROOT" /mnt
+    banner
+    echo -e "${BLD}Mounting target filesystems...${RST}"
+    
+    echo "Mounting root filesystem ($ROOT at /mnt)..."
+    mount "$ROOT" /mnt || die "Failed to mount root filesystem"
+    [ -d /mnt ] || die "Mount verification failed"
+    
     mkdir -p /mnt/boot/efi
-    mount "$EFI" /mnt/boot/efi
+    echo "Mounting EFI filesystem ($EFI at /mnt/boot/efi)..."
+    mount "$EFI" /mnt/boot/efi || die "Failed to mount EFI filesystem"
+    
+    echo -e "${GRN}Filesystems mounted successfully.${RST}"
 }
 
 install_rootfs() {
     banner
     echo -e "${BLD}Installing base system...${RST}"
     [ -f /opt/borealOS/rootfs.tar.gz ] || die "Rootfs not found at /opt/borealOS/rootfs.tar.gz"
-    tar -xzf /opt/borealOS/rootfs.tar.gz -C /mnt
-    echo -e "${GRN}Done.${RST}"
+    
+    echo "Extracting rootfs to $ROOT..."
+    tar -xzf /opt/borealOS/rootfs.tar.gz -C /mnt || die "Failed to extract rootfs"
+    
+    # Verify extraction worked
+    [ -d /mnt/etc ] || die "Rootfs extraction failed (no /etc directory)"
+    [ -d /mnt/bin ] || die "Rootfs extraction failed (no /bin directory)"
+    
+    echo -e "${GRN}Rootfs extracted successfully.${RST}"
 }
 
 select_de() {
@@ -226,15 +254,20 @@ configure_network() {
 
 chroot_install() {
     banner
-    echo -e "${BLD}Configuring installed system...${RST}"
+    echo -e "${BLD}Configuring installed system (chroot)...${RST}"
 
     # Bind critical filesystems (order matters!)
-    for d in dev proc sys run; do mount --bind /$d /mnt/$d; done
-    cp /etc/resolv.conf /mnt/etc/resolv.conf
+    echo "Binding system filesystems..."
+    for d in dev proc sys run; do mount --bind /$d /mnt/$d || die "Failed to bind /$d"; done
+    cp /etc/resolv.conf /mnt/etc/resolv.conf || echo "Warning: resolv.conf copy failed"
 
     # Get UUID of root partition for fstab
-    ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
-    EFI_UUID=$(blkid -s UUID -o value "$EFI")
+    echo "Getting partition UUIDs..."
+    ROOT_UUID=$(blkid -s UUID -o value "$ROOT") || die "Failed to get root UUID"
+    EFI_UUID=$(blkid -s UUID -o value "$EFI") || die "Failed to get EFI UUID"
+    
+    echo "Root UUID: $ROOT_UUID"
+    echo "EFI UUID: $EFI_UUID"
 
     case "$DE_CHOICE" in
         "KDE Plasma")     DE_PKGS="kde-plasma-desktop sddm" ;;
@@ -289,9 +322,10 @@ NMC
 chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
     fi
 
-    chroot /mnt /bin/sh <<CHROOT || die "Critical chroot error"
-# Note: Not using 'set -e' to allow recovery from missing commands in minimal rootfs
-trap 'echo "WARNING: Command failed, continuing..." >&2' ERR
+    echo "Running chroot configuration..."
+    if ! chroot /mnt /bin/sh <<'CHROOT'
+# Minimal sh script - no fancy features
+set +e  # Continue on errors
 
 echo "$HOSTNAME" > /etc/hostname
 cat > /etc/hosts <<HOSTS
@@ -485,9 +519,11 @@ else
     ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager 2>/dev/null || true
 fi
 CHROOT
-
-    echo -e "${GRN}Done.${RST}"
-}
+    then
+        echo -e "${CYN}Chroot configuration completed.${RST}"
+    else
+        die "Chroot failed - installation incomplete"
+    fi
 
 cleanup() {
     echo -e "${CYN}Cleaning up...${RST}"
@@ -545,11 +581,23 @@ main() {
     echo
     confirm "Proceed?" || die "Aborted."
 
+    echo -e "${CYN}Starting installation...${RST}"
+    
     partition_disk
+    echo -e "${CYN}Partitioning OK${RST}"; sleep 1
+    
     mount_target
+    echo -e "${CYN}Mounting OK${RST}"
+    
     install_rootfs
+    echo -e "${CYN}Rootfs extraction OK${RST}"
+    
     chroot_install
+    echo -e "${CYN}Chroot configuration OK${RST}"
+    
     cleanup
+    echo -e "${CYN}Cleanup OK${RST}"
+    
     finish
 }
 
