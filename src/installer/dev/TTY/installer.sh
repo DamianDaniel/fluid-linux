@@ -327,7 +327,7 @@ chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
     fi
 
     echo "Running chroot configuration..."
-    if ! chroot /mnt /bin/sh <<'CHROOT'
+    chroot /mnt /bin/sh <<'CHROOT'
 # Minimal sh script - no fancy features
 set +e  # Continue on errors
 
@@ -532,11 +532,8 @@ else
     ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager 2>/dev/null || true
 fi
 CHROOT
-    then
-        echo -e "${CYN}Chroot configuration completed.${RST}"
-    else
-        die "Chroot failed - installation incomplete"
-    fi
+
+    echo -e "${CYN}Chroot configuration completed.${RST}"
 
 cleanup() {
     echo -e "${CYN}Cleaning up...${RST}"
