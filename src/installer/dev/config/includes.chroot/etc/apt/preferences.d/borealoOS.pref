@@ -1,7 +1,0 @@
-Package: systemd-sysv
-Pin: release *
-Pin-Priority: -999
-
-Package: systemd
-Pin: release *
-Pin-Priority: -999
