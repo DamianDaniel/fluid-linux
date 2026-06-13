@@ -109,6 +109,20 @@ WELCOME
 
 chroot "$WORK/squashfs-root" /bin/bash -c "echo 'root:borealOS' | chpasswd" 2>/dev/null || true
 
+echo "==> Installing kernel and live-boot into rootfs..."
+mount --bind /dev  "$WORK/squashfs-root/dev"
+mount --bind /proc "$WORK/squashfs-root/proc"
+mount --bind /sys  "$WORK/squashfs-root/sys"
+cp /etc/resolv.conf "$WORK/squashfs-root/etc/resolv.conf"
+chroot "$WORK/squashfs-root" /bin/bash -c "
+    apt-get update -qq
+    apt-get install -y --no-install-recommends \
+        linux-image-amd64 \
+        live-boot \
+        live-boot-initramfs-tools
+"
+umount "$WORK/squashfs-root/dev" "$WORK/squashfs-root/proc" "$WORK/squashfs-root/sys"
+
 echo "==> Building SquashFS..."
 mksquashfs "$WORK/squashfs-root" "$WORK/iso/live/filesystem.squashfs" \
     -comp zstd -Xcompression-level 19 -noappend -quiet
