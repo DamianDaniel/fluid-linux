@@ -107,7 +107,20 @@ BANNER
 fi
 WELCOME
 
-chroot "$WORK/squashfs-root" /bin/bash -c "echo 'root:borealOS' | chpasswd" 2>/dev/null || true
+chroot "$WORK/squashfs-root" /bin/bash -c "echo 'root:borealOS' | chpasswd"
+
+mkdir -p "$WORK/squashfs-root/etc/inittab.d"
+sed -i 's|^1:.*|1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux|' \
+    "$WORK/squashfs-root/etc/inittab" 2>/dev/null || \
+cat > "$WORK/squashfs-root/etc/inittab" <<'INITTAB'
+::sysinit:/sbin/openrc sysinit
+::sysinit:/sbin/openrc boot
+::wait:/sbin/openrc default
+1:2345:respawn:/sbin/agetty --autologin root --noclear tty1 38400 linux
+2:2345:respawn:/sbin/agetty tty2 38400 linux
+::ctrlaltdel:/sbin/reboot
+::shutdown:/sbin/openrc shutdown
+INITTAB
 
 echo "==> Installing kernel and live-boot into rootfs..."
 mount --bind /dev  "$WORK/squashfs-root/dev"
