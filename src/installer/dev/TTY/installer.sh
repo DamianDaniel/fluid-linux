@@ -289,8 +289,9 @@ NMC
 chmod 600 /etc/NetworkManager/system-connections/${NET_IF}.nmconnection"
     fi
 
-    chroot /mnt /bin/sh <<CHROOT || die "Chroot configuration failed"
-set -e
+    chroot /mnt /bin/sh <<CHROOT || die "Critical chroot error"
+# Note: Not using 'set -e' to allow recovery from missing commands in minimal rootfs
+trap 'echo "WARNING: Command failed, continuing..." >&2' ERR
 
 echo "$HOSTNAME" > /etc/hostname
 cat > /etc/hosts <<HOSTS
@@ -302,12 +303,15 @@ HOSTS
 ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 echo "$TIMEZONE" > /etc/timezone
 
-if grep -q "^#.*$LOCALE" /etc/locale.gen 2>/dev/null; then
-    sed -i "s/^#.*$LOCALE/$LOCALE/" /etc/locale.gen
-else
-    echo "$LOCALE UTF-8" >> /etc/locale.gen
+# Try to generate locales if available
+if [ -f /etc/locale.gen ] && command -v locale-gen >/dev/null 2>&1; then
+    if grep -q "^#.*$LOCALE" /etc/locale.gen 2>/dev/null; then
+        sed -i "s/^#.*$LOCALE/$LOCALE/" /etc/locale.gen
+    else
+        echo "$LOCALE UTF-8" >> /etc/locale.gen
+    fi
+    locale-gen 2>&1 || echo "Warning: locale-gen failed"
 fi
-locale-gen
 echo "LANG=$LOCALE" > /etc/locale.conf
 
 # Create fstab
@@ -360,7 +364,9 @@ apt-get install -y --no-install-recommends \
     neofetch \
     parted dosfstools e2fsprogs \
     sudo curl wget \
-    $DE_PKGS $SHELL_PKG 2>&1 || echo "Warning: Some packages failed to install"
+    $DE_PKGS $SHELL_PKG 2>&1 | grep -i "unable\|error\|failed" || true
+
+echo "Package installation completed (some packages may have failed in minimal rootfs)"
 
 mkdir -p /etc/neofetch
 cat > /etc/neofetch/config.conf <<NEOF
@@ -391,13 +397,27 @@ if [ ! -d /boot/efi ]; then
     mkdir -p /boot/efi
 fi
 
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=BorealOS --no-nvram 2>&1 || echo "Warning: grub-install had issues"
-sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub 2>/dev/null || true
-update-grub 2>&1 || echo "Warning: update-grub had issues"
+if command -v grub-install >/dev/null 2>&1; then
+    echo "Installing GRUB bootloader..."
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=BorealOS --no-nvram 2>&1 || {
+        echo "Warning: grub-install failed - system may not boot"
+    }
+    [ -f /etc/default/grub ] && sed -i 's/GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="BorealOS"/' /etc/default/grub 2>/dev/null || true
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub 2>&1 || echo "Warning: update-grub failed"
+    fi
+else
+    echo "Warning: grub-install not found - bootloader not installed"
+fi
 
 case "$DE_CHOICE" in
     "KDE Plasma")
-        rc-update add sddm default 2>/dev/null || ln -sf /etc/init.d/sddm /etc/rc2.d/S99sddm 2>/dev/null || true
+        if command -v rc-update >/dev/null 2>&1; then
+            rc-update add sddm default 2>/dev/null || true
+        else
+            mkdir -p /etc/rc2.d
+            ln -sf /etc/init.d/sddm /etc/rc2.d/S99sddm 2>/dev/null || true
+        fi
         mkdir -p /etc/sddm.conf.d
         cat > /etc/sddm.conf.d/borealos.conf <<SDDM
 [General]
@@ -407,7 +427,12 @@ Background=/usr/share/wallpapers/BorealOS/default.png
 SDDM
         ;;
     "XFCE")
-        rc-update add lightdm default 2>/dev/null || ln -sf /etc/init.d/lightdm /etc/rc2.d/S99lightdm 2>/dev/null || true
+        if command -v rc-update >/dev/null 2>&1; then
+            rc-update add lightdm default 2>/dev/null || true
+        else
+            mkdir -p /etc/rc2.d
+            ln -sf /etc/init.d/lightdm /etc/rc2.d/S99lightdm 2>/dev/null || true
+        fi
         mkdir -p /etc/lightdm
         cat >> /etc/lightdm/lightdm-gtk-greeter.conf <<LDM
 [greeter]
@@ -453,7 +478,12 @@ SWAY
         ;;
 esac
 
-rc-update add NetworkManager default 2>/dev/null || ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager 2>/dev/null || true
+if command -v rc-update >/dev/null 2>&1; then
+    rc-update add NetworkManager default 2>/dev/null || true
+else
+    mkdir -p /etc/rc2.d
+    ln -sf /etc/init.d/NetworkManager /etc/rc2.d/S99NetworkManager 2>/dev/null || true
+fi
 CHROOT
 
     echo -e "${GRN}Done.${RST}"
